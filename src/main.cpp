@@ -70,30 +70,27 @@ bool launch(char **argv) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) { fputs("usage: astralia-open key...\n", stderr); return 1; }
+    if (argc < 2) { fputs("usage: astralia-open key [args...]\n", stderr); return 1; }
 
     static char buf[16384];
     if (!readConf(buf, sizeof buf)) return 1;
 
-    int rc = 0;
-    for (int i = 1; i < argc; i++) {
-        char val[512], tval[512], *cmd[64];
-        if (!findCmd(buf, argv[i], val, sizeof val)) { fprintf(stderr, "unknown app: %s\n", argv[i]); rc = 1; continue; }
+    char val[512], tval[512], *cmd[64];
+    if (!findCmd(buf, argv[1], val, sizeof val)) { fprintf(stderr, "unknown app: %s\n", argv[1]); return 1; }
 
-        // terminal:<cmd> runs as `<terminal> -e <cmd>
-        char *s = val;
-        while (*s == ' ' || *s == '\t') s++;
-        bool term = !strncmp(s, "terminal:", 9);
-        int n = 0;
-        if (term) {
-            s += 9;
-            if (!findCmd(buf, "terminal", tval, sizeof tval)) { fputs("no `terminal` entry\n", stderr); rc = 1; continue; }
-            n = split(tval, cmd, 60);
-            cmd[n++] = (char *)"-e";
-        }
-        n += split(s, cmd + n, 63 - n);
-        cmd[n] = nullptr;
-        if (n == 0 || !launch(cmd)) { fprintf(stderr, "cannot launch: %s\n", argv[i]); rc = 1; }
+    // terminal:<cmd> runs as `<terminal> -e <cmd>`
+    char *s = val;
+    while (*s == ' ' || *s == '\t') s++;
+    int n = 0;
+    if (!strncmp(s, "terminal:", 9)) {
+        s += 9;
+        if (!findCmd(buf, "terminal", tval, sizeof tval)) { fputs("no `terminal` entry\n", stderr); return 1; }
+        n = split(tval, cmd, 60);
+        cmd[n++] = (char *)"-e";
     }
-    return rc;
+    n += split(s, cmd + n, 63 - n);
+    for (int i = 2; i < argc && n < 63; i++) cmd[n++] = argv[i];
+    cmd[n] = nullptr;
+    if (n == 0 || !launch(cmd)) { fprintf(stderr, "cannot launch: %s\n", argv[1]); return 1; }
+    return 0;
 }
