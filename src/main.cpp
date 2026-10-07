@@ -11,24 +11,33 @@
 
 extern char **environ;
 
-bool readConf(char *buf, size_t cap) {
-    char path[512];
-    const char *e = getenv("ASTRALIA_CONF");
-    if (e) {
-        snprintf(path, sizeof path, "%s", e);
-    } else {
-        char host[256] = "";
-        gethostname(host, sizeof host - 1);
-        const char *h = getenv("HOME");
-        snprintf(path, sizeof path, "%s/.config/astralia-open/%s.conf", h ? h : "", host);
-    }
+static bool readFile(const char *path, char *buf, size_t cap) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) { fprintf(stderr, "cannot open %s\n", path); return false; }
+    if (fd < 0) return false;
     ssize_t n = read(fd, buf, cap - 1);
     close(fd);
     if (n < 0) return false;
     buf[n] = 0;
     return true;
+}
+
+// lookup: $ASTRALIA_CONF, else ~/.config/astralia-open/<host>.conf, else the installed default.conf
+bool readConf(char *buf, size_t cap) {
+    char path[512];
+    const char *e = getenv("ASTRALIA_CONF");
+    if (e) {
+        if (readFile(e, buf, cap)) return true;
+        fprintf(stderr, "cannot open %s\n", e);
+        return false;
+    }
+    char host[256] = "";
+    gethostname(host, sizeof host - 1);
+    const char *h = getenv("HOME");
+    snprintf(path, sizeof path, "%s/.config/astralia-open/%s.conf", h ? h : "", host);
+    if (readFile(path, buf, cap)) return true;
+    if (readFile(DEFAULT_CONF, buf, cap)) return true;
+    fprintf(stderr, "cannot open %s or %s\n", path, DEFAULT_CONF);
+    return false;
 }
 
 bool findCmd(const char *buf, const char *key, char *out, size_t cap) {
